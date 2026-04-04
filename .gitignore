@@ -1,0 +1,28 @@
+# Python virtual environment — never commit this
+venv/
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment variables — contains secrets
+.env
+
+# AWS credentials — never commit
+.aws/
+
+# Checkpoints — large Flink recovery files
+checkpoints/
+
+# Temporary data files
+data/
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
