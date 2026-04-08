@@ -243,6 +243,23 @@ class SurgeEngine:
             f"next_window={self.current_window}s"
         )
 
+        # Push metrics to CloudWatch
+        try:
+            from cloudwatch_metrics import publish
+            import os
+            scale = os.getenv('SCALE_LEVEL', '5K')
+            publish(
+                events_per_sec = events_per_minute / 60,
+                latency_ms     = avg_lat,
+                surge_zones    = surge_zones,
+                window_sec     = self.current_window,
+                flush_ms       = flush_ms,
+                total_events   = self.total_events,
+                scale_level    = scale
+            )
+        except Exception as e:
+            logger.error(f"CloudWatch publish error: {e}")
+
         # Reset window
         self.window_events.clear()
         self.window_start = time.time()
