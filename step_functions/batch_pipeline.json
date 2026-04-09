@@ -1,0 +1,108 @@
+{
+  "Comment": "Ridesharing batch pipeline orchestration - Innovation 3",
+  "StartAt": "CheckInputData",
+  "States": {
+
+    "CheckInputData": {
+      "Type": "Task",
+      "Comment": "Innovation 3: Only run if data exists in S3",
+      "Resource": "arn:aws:states:::aws-sdk:s3:listObjectsV2",
+      "Parameters": {
+        "Bucket": "ridesharing-pipeline-h20250060",
+        "Prefix.$": "States.Format('raw/trips/city=MUM/date={}/trips.csv', $$.Execution.Input.process_date)"
+      },
+      "Next": "IsDataAvailable",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "NotifyFailure",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+
+    "IsDataAvailable": {
+      "Type": "Choice",
+      "Comment": "Check if S3 file exists and has content",
+      "Choices": [
+        {
+          "Variable": "$.KeyCount",
+          "NumericGreaterThan": 0,
+          "Next": "StartGlueJob"
+        }
+      ],
+      "Default": "NoDataAvailable"
+    },
+
+    "NoDataAvailable": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "arn:aws:sns:ap-south-1:276209672013:ridesharing-alerts",
+        "Message.$": "States.Format('No data available for date: {}. Skipping batch job.', $$.Execution.Input.process_date)",
+        "Subject": "Ridesharing Batch Job - No Data"
+      },
+      "Next": "PipelineSkipped"
+    },
+
+    "PipelineSkipped": {
+      "Type": "Succeed",
+      "Comment": "Pipeline skipped — no data to process"
+    },
+
+    "StartGlueJob": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Comment": "Run PySpark batch job on AWS Glue",
+      "Parameters": {
+        "JobName": "ridesharing-batch-pipeline",
+        "Arguments": {
+          "--process_date.$": "$$.Execution.Input.process_date",
+          "--input_path": "s3://ridesharing-pipeline-h20250060/raw/trips",
+          "--output_path": "s3://ridesharing-pipeline-h20250060/processed",
+          "--min_file_size": "100"
+        }
+      },
+      "Next": "NotifySuccess",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "NotifyFailure",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+
+    "NotifySuccess": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "arn:aws:sns:ap-south-1:276209672013:ridesharing-alerts",
+        "Message.$": "States.Format('Batch pipeline completed successfully for date: {}. Parquet files written to S3.', $$.Execution.Input.process_date)",
+        "Subject": "Ridesharing Batch Job - SUCCESS"
+      },
+      "Next": "PipelineSucceeded"
+    },
+
+    "PipelineSucceeded": {
+      "Type": "Succeed"
+    },
+
+    "NotifyFailure": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "arn:aws:sns:ap-south-1:276209672013:ridesharing-alerts",
+        "Message.$": "States.Format('Batch pipeline FAILED for date: {}. Error: {}', $$.Execution.Input.process_date, $.error)",
+        "Subject": "Ridesharing Batch Job - FAILED"
+      },
+      "Next": "PipelineFailed"
+    },
+
+    "PipelineFailed": {
+      "Type": "Fail",
+      "Error": "BatchPipelineFailed",
+      "Cause": "Glue job failed"
+    }
+  }
+}
