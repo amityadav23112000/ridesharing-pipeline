@@ -20,6 +20,17 @@ from pyspark.sql.types import (
     StructType, StructField, StringType,
     IntegerType, DoubleType
 )
+from prometheus_client import Counter, Gauge, start_http_server
+
+# ── PROMETHEUS METRICS (exposed on port 8001) ──
+prom_events_processed    = Counter('spark_events_processed_total',
+                                   'Total GPS events processed by Spark')
+prom_active_surge_zones  = Gauge('spark_active_surge_zones',
+                                 'Number of active surge zones in last batch')
+prom_batch_latency_ms    = Gauge('spark_batch_latency_ms',
+                                 'Average E2E latency of last batch in ms')
+prom_kafka_eps           = Gauge('spark_kafka_events_per_second',
+                                 'Kafka events per second in last batch')
 
 logging.basicConfig(
     level=logging.INFO,
@@ -172,6 +183,13 @@ def write_batch_to_dynamodb(batch_df, batch_id):
         f"latency avg={avg_lat:.0f}ms p95={p95_lat:.0f}ms p99={p99_lat:.0f}ms"
     )
 
+    # ── UPDATE PROMETHEUS METRICS ──
+    kafka_events_in_batch = sum(int(r.total_events or 0) for r in deduped_rows)
+    prom_events_processed.inc(kafka_events_in_batch)
+    prom_active_surge_zones.set(surge_count)
+    prom_batch_latency_ms.set(round(avg_lat, 2))
+    prom_kafka_eps.set(round(kafka_events_in_batch / max(WINDOW_SECONDS, 1), 2))
+
     # Publish BETTER metrics to CloudWatch
     try:
         import boto3 as cw_boto3
@@ -232,6 +250,13 @@ def create_spark_session():
 
 def run():
     """Main Spark Structured Streaming job."""
+    # Start Prometheus HTTP server on port 8001 (GPS simulator uses 8000)
+    try:
+        start_http_server(8001)
+        logger.info("Prometheus metrics server started on port 8001")
+    except Exception as e:
+        logger.warning(f"Could not start Prometheus server: {e}")
+
     logger.info("=" * 60)
     logger.info("SPARK STRUCTURED STREAMING — SURGE ENGINE")
     logger.info(f"Scale:    {SCALE_LEVEL}")

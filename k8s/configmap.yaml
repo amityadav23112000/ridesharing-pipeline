@@ -6,7 +6,7 @@ metadata:
 data:
   KAFKA_BROKERS: "kafka-broker-0.kafka-headless.ridesharing.svc.cluster.local:9092,kafka-broker-1.kafka-headless.ridesharing.svc.cluster.local:9092,kafka-broker-2.kafka-headless.ridesharing.svc.cluster.local:9092"
   KAFKA_TOPICS: "gps-critical,gps-surge,gps-normal"
-  WINDOW_SECONDS: "10"
+  WINDOW_SECONDS: "5"
   AWS_DEFAULT_REGION: "ap-south-1"
   CHECKPOINT_DIR: "/tmp/spark-checkpoints"
   JAR_PATH: "/app/jars"
