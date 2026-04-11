@@ -95,56 +95,70 @@ def write_batch_to_dynamodb(batch_df, batch_id):
     table    = dynamodb.Table('surge_pricing')
     surge_count = 0
 
-    # DynamoDB batch_writer sends 25 items per API call
-    # Much faster than individual put_item calls
-    with table.batch_writer() as batch:
-        for row in rows:
-            on_trip   = int(row.on_trip_count   or 0)
-            available = int(row.available_count or 0)
-            demand_ratio = on_trip / max(available, 1)
-            multiplier   = get_surge_multiplier(demand_ratio)
+    # Deduplicate rows by zone_id
+    seen_zones = {}
+    for row in rows:
+        zone = row.zone_id
+        on_trip = int(row.on_trip_count or 0)
+        if zone not in seen_zones or on_trip > int(seen_zones[zone].on_trip_count or 0):
+            seen_zones[zone] = row
+    deduped_rows = list(seen_zones.values())
 
-            batch.put_item(Item={
-                'zone_id':               row.zone_id,
-                'timestamp':             now,
-                'city_id':               row.city_id,
-                'surge_multiplier':      Decimal(str(round(multiplier,  2))),
-                'waiting_riders':        on_trip,
-                'available_drivers':     available,
-                'demand_ratio':          Decimal(str(round(demand_ratio, 4))),
-                'window_size_sec':       WINDOW_SECONDS,
-                'scale_level':           SCALE_LEVEL,
-                'batch_id':              batch_id,
-                'computed_at':           now,
-            })
-
-            if multiplier > 1.0:
-                surge_count += 1
-                logger.info(
-                    f"SURGE {multiplier}x | {row.zone_id} | "
-                    f"waiting={on_trip} available={available} | "
-                    f"demand={demand_ratio:.2f}"
-                )
-
+    for i, row in enumerate(deduped_rows):
+        on_trip   = int(row.on_trip_count   or 0)
+        available = int(row.available_count or 0)
+        demand_ratio = on_trip / max(available, 1)
+        multiplier   = get_surge_multiplier(demand_ratio)
+        unique_ts = f"{now}_{batch_id}_{i}_{row.zone_id}"
+        table.put_item(Item={
+            'zone_id':               row.zone_id,
+            'timestamp':             unique_ts,
+            'city_id':               row.city_id,
+            'surge_multiplier':      Decimal(str(round(multiplier,  2))),
+            'waiting_riders':        on_trip,
+            'available_drivers':     available,
+            'demand_ratio':          Decimal(str(round(demand_ratio, 4))),
+            'window_size_sec':       WINDOW_SECONDS,
+            'scale_level':           SCALE_LEVEL,
+            'batch_id':              batch_id,
+            'computed_at':           now,
+        })
+        if multiplier > 1.0:
+            surge_count += 1
+            logger.info(
+                f"SURGE {multiplier}x | {row.zone_id} | "
+                f"waiting={on_trip} available={available} | "
+                f"demand={demand_ratio:.2f}"
+            )
     logger.info(
         f"Batch {batch_id} done | "
         f"zones={count} surge_zones={surge_count} | "
         f"scale={SCALE_LEVEL} window={WINDOW_SECONDS}s"
     )
 
-    # Publish to CloudWatch
+    # Publish BETTER metrics to CloudWatch
     try:
-        sys.path.insert(0, '/home/amit-ydav/ridesharing-pipeline/src')
-        from cloudwatch_metrics import publish
-        publish(
-            events_per_sec = count / WINDOW_SECONDS,
-            latency_ms     = WINDOW_SECONDS * 1000,
-            surge_zones    = surge_count,
-            window_sec     = WINDOW_SECONDS,
-            flush_ms       = 0,
-            total_events   = count,
-            scale_level    = SCALE_LEVEL
+        import boto3 as cw_boto3
+        from datetime import datetime as cw_dt
+        cw  = cw_boto3.client('cloudwatch', region_name=AWS_REGION)
+        now_cw = cw_dt.utcnow()
+        total_waiting   = sum(int(r.on_trip_count or 0) for r in deduped_rows)
+        total_available = sum(int(r.available_count or 0) for r in deduped_rows)
+        avg_demand      = total_waiting / max(total_available, 1)
+        kafka_events    = sum(int(r.total_events or 0) for r in deduped_rows)
+        cw.put_metric_data(
+            Namespace='RidesharingPipeline',
+            MetricData=[
+                {'MetricName':'KafkaEventsPerBatch','Value':kafka_events,'Unit':'Count','Timestamp':now_cw,'Dimensions':[{'Name':'Scale','Value':SCALE_LEVEL}]},
+                {'MetricName':'KafkaEventsPerSecond','Value':kafka_events/max(WINDOW_SECONDS,1),'Unit':'Count/Second','Timestamp':now_cw,'Dimensions':[{'Name':'Scale','Value':SCALE_LEVEL}]},
+                {'MetricName':'ZonesProcessedPerBatch','Value':len(deduped_rows),'Unit':'Count','Timestamp':now_cw,'Dimensions':[{'Name':'Scale','Value':SCALE_LEVEL}]},
+                {'MetricName':'ActiveSurgeZones','Value':surge_count,'Unit':'Count','Timestamp':now_cw,'Dimensions':[{'Name':'Scale','Value':SCALE_LEVEL}]},
+                {'MetricName':'AvgDemandRatio','Value':round(avg_demand,4),'Unit':'None','Timestamp':now_cw,'Dimensions':[{'Name':'Scale','Value':SCALE_LEVEL}]},
+                {'MetricName':'TotalWaitingRiders','Value':total_waiting,'Unit':'Count','Timestamp':now_cw,'Dimensions':[{'Name':'Scale','Value':SCALE_LEVEL}]},
+                {'MetricName':'WindowSizeSeconds','Value':WINDOW_SECONDS,'Unit':'Seconds','Timestamp':now_cw,'Dimensions':[{'Name':'Scale','Value':SCALE_LEVEL}]},
+            ]
         )
+        logger.info(f"CW | scale={SCALE_LEVEL} | kafka_eps={kafka_events/max(WINDOW_SECONDS,1):.1f} | zones={len(deduped_rows)} | surge={surge_count} | demand={avg_demand:.2f} | waiting={total_waiting}")
     except Exception as e:
         logger.error(f"CloudWatch error: {e}")
 
