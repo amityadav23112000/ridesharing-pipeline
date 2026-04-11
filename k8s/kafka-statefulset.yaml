@@ -97,23 +97,19 @@ spec:
               memory: "1Gi"
               cpu: "1000m"
           livenessProbe:
-            exec:
-              command:
-                - sh
-                - -c
-                - "kafka-broker-api-versions --bootstrap-server localhost:9092"
-            initialDelaySeconds: 60
+            tcpSocket:
+              port: 9092
+            initialDelaySeconds: 90
             periodSeconds: 30
             timeoutSeconds: 10
+            failureThreshold: 5
           readinessProbe:
-            exec:
-              command:
-                - sh
-                - -c
-                - "kafka-broker-api-versions --bootstrap-server localhost:9092"
-            initialDelaySeconds: 30
+            tcpSocket:
+              port: 9092
+            initialDelaySeconds: 60
             periodSeconds: 10
             timeoutSeconds: 5
+            failureThreshold: 6
           volumeMounts:
             - name: data
               mountPath: /var/lib/kafka/data

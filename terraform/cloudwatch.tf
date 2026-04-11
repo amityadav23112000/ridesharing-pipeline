@@ -72,6 +72,7 @@ resource "aws_cloudwatch_dashboard" "main" {
           title   = "Kafka Events per Second"
           view    = "timeSeries"
           stacked = false
+          region  = var.aws_region
           metrics = [
             for s in local.scales : [local.namespace, "KafkaEventsPerSecond", "Scale", s]
           ]
@@ -88,6 +89,7 @@ resource "aws_cloudwatch_dashboard" "main" {
           title   = "Kafka Events per Batch"
           view    = "timeSeries"
           stacked = false
+          region  = var.aws_region
           metrics = [
             for s in local.scales : [local.namespace, "KafkaEventsPerBatch", "Scale", s]
           ]
@@ -111,6 +113,7 @@ resource "aws_cloudwatch_dashboard" "main" {
           title   = "Avg E2E Latency"
           view    = "timeSeries"
           stacked = false
+          region  = var.aws_region
           metrics = [
             for s in local.scales : [local.namespace, "AvgLatencyMs", "Scale", s]
           ]
@@ -127,6 +130,7 @@ resource "aws_cloudwatch_dashboard" "main" {
           title   = "P95 E2E Latency"
           view    = "timeSeries"
           stacked = false
+          region  = var.aws_region
           metrics = [
             for s in local.scales : [local.namespace, "P95LatencyMs", "Scale", s]
           ]
@@ -143,6 +147,7 @@ resource "aws_cloudwatch_dashboard" "main" {
           title   = "P99 E2E Latency"
           view    = "timeSeries"
           stacked = false
+          region  = var.aws_region
           metrics = [
             for s in local.scales : [local.namespace, "P99LatencyMs", "Scale", s]
           ]
@@ -166,6 +171,7 @@ resource "aws_cloudwatch_dashboard" "main" {
           title   = "Active Surge Zones"
           view    = "timeSeries"
           stacked = false
+          region  = var.aws_region
           metrics = [
             for s in local.scales : [local.namespace, "ActiveSurgeZones", "Scale", s]
           ]
@@ -182,6 +188,7 @@ resource "aws_cloudwatch_dashboard" "main" {
           title   = "Zones Processed per Batch"
           view    = "timeSeries"
           stacked = false
+          region  = var.aws_region
           metrics = [
             for s in local.scales : [local.namespace, "ZonesProcessedPerBatch", "Scale", s]
           ]
@@ -205,6 +212,7 @@ resource "aws_cloudwatch_dashboard" "main" {
           title   = "Avg Demand Ratio (on_trip / available)"
           view    = "timeSeries"
           stacked = false
+          region  = var.aws_region
           metrics = [
             for s in local.scales : [local.namespace, "AvgDemandRatio", "Scale", s]
           ]
@@ -221,6 +229,7 @@ resource "aws_cloudwatch_dashboard" "main" {
           title   = "Total Waiting Riders"
           view    = "timeSeries"
           stacked = false
+          region  = var.aws_region
           metrics = [
             for s in local.scales : [local.namespace, "TotalWaitingRiders", "Scale", s]
           ]

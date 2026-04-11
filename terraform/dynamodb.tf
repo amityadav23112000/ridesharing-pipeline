@@ -38,6 +38,32 @@ resource "aws_dynamodb_table" "surge_pricing" {
   }
 }
 
+# ── zone_demand table ─────────────────────────────────────────────────────────
+# Partition key : zone_id
+# Sort key      : hour_bucket (e.g. "2025-01-01T00")
+resource "aws_dynamodb_table" "zone_demand" {
+  name         = "zone_demand"
+  billing_mode = "PAY_PER_REQUEST"
+
+  hash_key  = "zone_id"
+  range_key = "hour_bucket"
+
+  attribute {
+    name = "zone_id"
+    type = "S"
+  }
+
+  attribute {
+    name = "hour_bucket"
+    type = "S"
+  }
+
+  tags = {
+    Project = var.project
+    Table   = "zone-demand"
+  }
+}
+
 # ── driver_status table ───────────────────────────────────────────────────────
 # Partition key : driver_id
 # TTL           : 5 minutes — keeps only live drivers in the table

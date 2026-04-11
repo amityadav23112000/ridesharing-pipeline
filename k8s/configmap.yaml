@@ -8,5 +8,5 @@ data:
   KAFKA_TOPICS: "gps-critical,gps-surge,gps-normal"
   WINDOW_SECONDS: "10"
   AWS_DEFAULT_REGION: "ap-south-1"
-  CHECKPOINT_DIR: "s3://ridesharing-pipeline-h20250060/checkpoints/k8s/"
+  CHECKPOINT_DIR: "/tmp/spark-checkpoints"
   JAR_PATH: "/app/jars"
