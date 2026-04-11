@@ -1,0 +1,127 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-headless
+  namespace: ridesharing
+spec:
+  clusterIP: None          # headless — broker-N gets stable DNS
+  selector:
+    app: kafka
+  ports:
+    - name: internal
+      port: 9092
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-external
+  namespace: ridesharing
+spec:
+  type: NodePort
+  selector:
+    app: kafka
+  ports:
+    - name: external
+      port: 9092
+      nodePort: 30092
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka-broker
+  namespace: ridesharing
+spec:
+  serviceName: kafka-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      # Anti-affinity: spread brokers across nodes
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: kafka
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: kafka
+          image: confluentinc/cp-kafka:7.6.0
+          ports:
+            - containerPort: 9092
+              name: internal
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: KAFKA_BROKER_ID
+              # kafka-broker-0 → 0, kafka-broker-1 → 1, etc.
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['apps.kubernetes.io/pod-index']
+            - name: KAFKA_ZOOKEEPER_CONNECT
+              value: "zookeeper.ridesharing.svc.cluster.local:2181"
+            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+              value: "INTERNAL:PLAINTEXT"
+            - name: KAFKA_INTER_BROKER_LISTENER_NAME
+              value: "INTERNAL"
+            - name: KAFKA_LISTENERS
+              value: "INTERNAL://0.0.0.0:9092"
+            - name: KAFKA_ADVERTISED_LISTENERS
+              value: "INTERNAL://$(POD_NAME).kafka-headless.ridesharing.svc.cluster.local:9092"
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: "3"
+            - name: KAFKA_DEFAULT_REPLICATION_FACTOR
+              value: "3"
+            - name: KAFKA_MIN_INSYNC_REPLICAS
+              value: "2"
+            - name: KAFKA_NUM_PARTITIONS
+              value: "10"
+            - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE
+              value: "false"
+            - name: KAFKA_HEAP_OPTS
+              value: "-Xmx512m -Xms256m"
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "kafka-broker-api-versions --bootstrap-server localhost:9092"
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "kafka-broker-api-versions --bootstrap-server localhost:9092"
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/kafka/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi

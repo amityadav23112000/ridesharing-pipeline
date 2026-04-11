@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gps-simulator
+  namespace: ridesharing
+  labels:
+    app: gps-simulator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gps-simulator
+  template:
+    metadata:
+      labels:
+        app: gps-simulator
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/"
+    spec:
+      containers:
+        - name: gps-simulator
+          image: ridesharing-pipeline:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "src/gps_simulator.py"]
+          args: ["--drivers", "$(NUM_DRIVERS)"]
+          ports:
+            - containerPort: 8000
+              name: prometheus
+          envFrom:
+            - configMapRef:
+                name: pipeline-config
+          env:
+            - name: NUM_DRIVERS
+              value: "5000"           # override per scale: 5000 / 50000 / 500000
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 30
+---
+# Expose Prometheus metrics inside the cluster
+apiVersion: v1
+kind: Service
+metadata:
+  name: gps-simulator
+  namespace: ridesharing
+  labels:
+    app: gps-simulator
+spec:
+  selector:
+    app: gps-simulator
+  ports:
+    - name: prometheus
+      port: 8000
+      targetPort: 8000

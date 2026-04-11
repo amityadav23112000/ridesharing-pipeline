@@ -13,7 +13,8 @@ from decimal import Decimal
 from datetime import datetime
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
-    from_json, col, window, count, when
+    from_json, col, window, count, when,
+    min as spark_min,
 )
 from pyspark.sql.types import (
     StructType, StructField, StringType,
@@ -65,6 +66,25 @@ SURGE_RULES = [
     (0.0, 1.0),
 ]
 
+def _parse_event_ts(ts_str):
+    """Parse GPS event timestamp (ISO 8601 with Z suffix) to datetime."""
+    if not ts_str:
+        return None
+    try:
+        clean = ts_str.rstrip('Z')
+        if '.' in clean:
+            return datetime.strptime(clean, '%Y-%m-%dT%H:%M:%S.%f')
+        return datetime.strptime(clean, '%Y-%m-%dT%H:%M:%S')
+    except Exception:
+        return None
+
+def _percentile(sorted_vals, pct):
+    """Compute percentile from a sorted list."""
+    if not sorted_vals:
+        return 0.0
+    idx = min(int(len(sorted_vals) * pct / 100), len(sorted_vals) - 1)
+    return sorted_vals[idx]
+
 def get_surge_multiplier(demand_ratio):
     if demand_ratio is None:
         return 1.0
@@ -104,12 +124,20 @@ def write_batch_to_dynamodb(batch_df, batch_id):
             seen_zones[zone] = row
     deduped_rows = list(seen_zones.values())
 
+    latencies = []
     for i, row in enumerate(deduped_rows):
         on_trip   = int(row.on_trip_count   or 0)
         available = int(row.available_count or 0)
         demand_ratio = on_trip / max(available, 1)
         multiplier   = get_surge_multiplier(demand_ratio)
         unique_ts = f"{now}_{batch_id}_{i}_{row.zone_id}"
+
+        # ── E2E LATENCY: event creation → DynamoDB write ──
+        event_ts   = _parse_event_ts(getattr(row, 'min_event_ts', None))
+        latency_ms = (datetime.utcnow() - event_ts).total_seconds() * 1000 \
+                     if event_ts else 0.0
+        latencies.append(latency_ms)
+
         table.put_item(Item={
             'zone_id':               row.zone_id,
             'timestamp':             unique_ts,
@@ -122,18 +150,26 @@ def write_batch_to_dynamodb(batch_df, batch_id):
             'scale_level':           SCALE_LEVEL,
             'batch_id':              batch_id,
             'computed_at':           now,
+            'e2e_latency_ms':        Decimal(str(round(latency_ms, 2))),
         })
         if multiplier > 1.0:
             surge_count += 1
             logger.info(
                 f"SURGE {multiplier}x | {row.zone_id} | "
                 f"waiting={on_trip} available={available} | "
-                f"demand={demand_ratio:.2f}"
+                f"demand={demand_ratio:.2f} | latency={latency_ms:.0f}ms"
             )
+
+    sorted_lat = sorted(latencies)
+    avg_lat = sum(latencies) / len(latencies) if latencies else 0.0
+    p95_lat = _percentile(sorted_lat, 95)
+    p99_lat = _percentile(sorted_lat, 99)
+
     logger.info(
         f"Batch {batch_id} done | "
         f"zones={count} surge_zones={surge_count} | "
-        f"scale={SCALE_LEVEL} window={WINDOW_SECONDS}s"
+        f"scale={SCALE_LEVEL} window={WINDOW_SECONDS}s | "
+        f"latency avg={avg_lat:.0f}ms p95={p95_lat:.0f}ms p99={p99_lat:.0f}ms"
     )
 
     # Publish BETTER metrics to CloudWatch
@@ -146,19 +182,27 @@ def write_batch_to_dynamodb(batch_df, batch_id):
         total_available = sum(int(r.available_count or 0) for r in deduped_rows)
         avg_demand      = total_waiting / max(total_available, 1)
         kafka_events    = sum(int(r.total_events or 0) for r in deduped_rows)
+        dims = [{'Name': 'Scale', 'Value': SCALE_LEVEL}]
         cw.put_metric_data(
             Namespace='RidesharingPipeline',
             MetricData=[
-                {'MetricName':'KafkaEventsPerBatch','Value':kafka_events,'Unit':'Count','Timestamp':now_cw,'Dimensions':[{'Name':'Scale','Value':SCALE_LEVEL}]},
-                {'MetricName':'KafkaEventsPerSecond','Value':kafka_events/max(WINDOW_SECONDS,1),'Unit':'Count/Second','Timestamp':now_cw,'Dimensions':[{'Name':'Scale','Value':SCALE_LEVEL}]},
-                {'MetricName':'ZonesProcessedPerBatch','Value':len(deduped_rows),'Unit':'Count','Timestamp':now_cw,'Dimensions':[{'Name':'Scale','Value':SCALE_LEVEL}]},
-                {'MetricName':'ActiveSurgeZones','Value':surge_count,'Unit':'Count','Timestamp':now_cw,'Dimensions':[{'Name':'Scale','Value':SCALE_LEVEL}]},
-                {'MetricName':'AvgDemandRatio','Value':round(avg_demand,4),'Unit':'None','Timestamp':now_cw,'Dimensions':[{'Name':'Scale','Value':SCALE_LEVEL}]},
-                {'MetricName':'TotalWaitingRiders','Value':total_waiting,'Unit':'Count','Timestamp':now_cw,'Dimensions':[{'Name':'Scale','Value':SCALE_LEVEL}]},
-                {'MetricName':'WindowSizeSeconds','Value':WINDOW_SECONDS,'Unit':'Seconds','Timestamp':now_cw,'Dimensions':[{'Name':'Scale','Value':SCALE_LEVEL}]},
+                {'MetricName':'KafkaEventsPerBatch',  'Value':kafka_events,                        'Unit':'Count',         'Timestamp':now_cw,'Dimensions':dims},
+                {'MetricName':'KafkaEventsPerSecond', 'Value':kafka_events/max(WINDOW_SECONDS,1),  'Unit':'Count/Second',  'Timestamp':now_cw,'Dimensions':dims},
+                {'MetricName':'ZonesProcessedPerBatch','Value':len(deduped_rows),                  'Unit':'Count',         'Timestamp':now_cw,'Dimensions':dims},
+                {'MetricName':'ActiveSurgeZones',     'Value':surge_count,                         'Unit':'Count',         'Timestamp':now_cw,'Dimensions':dims},
+                {'MetricName':'AvgDemandRatio',       'Value':round(avg_demand,4),                 'Unit':'None',          'Timestamp':now_cw,'Dimensions':dims},
+                {'MetricName':'TotalWaitingRiders',   'Value':total_waiting,                       'Unit':'Count',         'Timestamp':now_cw,'Dimensions':dims},
+                {'MetricName':'WindowSizeSeconds',    'Value':WINDOW_SECONDS,                      'Unit':'Seconds',       'Timestamp':now_cw,'Dimensions':dims},
+                {'MetricName':'AvgLatencyMs',         'Value':round(avg_lat, 2),                   'Unit':'Milliseconds',  'Timestamp':now_cw,'Dimensions':dims},
+                {'MetricName':'P95LatencyMs',         'Value':round(p95_lat, 2),                   'Unit':'Milliseconds',  'Timestamp':now_cw,'Dimensions':dims},
+                {'MetricName':'P99LatencyMs',         'Value':round(p99_lat, 2),                   'Unit':'Milliseconds',  'Timestamp':now_cw,'Dimensions':dims},
             ]
         )
-        logger.info(f"CW | scale={SCALE_LEVEL} | kafka_eps={kafka_events/max(WINDOW_SECONDS,1):.1f} | zones={len(deduped_rows)} | surge={surge_count} | demand={avg_demand:.2f} | waiting={total_waiting}")
+        logger.info(
+            f"CW | scale={SCALE_LEVEL} | kafka_eps={kafka_events/max(WINDOW_SECONDS,1):.1f} | "
+            f"zones={len(deduped_rows)} | surge={surge_count} | demand={avg_demand:.2f} | "
+            f"waiting={total_waiting} | latency avg={avg_lat:.0f}ms p95={p95_lat:.0f}ms"
+        )
     except Exception as e:
         logger.error(f"CloudWatch error: {e}")
 
@@ -250,7 +294,8 @@ def run():
                        1)).alias("on_trip_count"),
             count(when(col("status") == "available",
                        1)).alias("available_count"),
-            count("*").alias("total_events")
+            count("*").alias("total_events"),
+            spark_min(col("timestamp")).alias("min_event_ts"),
         )
     )
 

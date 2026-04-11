@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-streaming
+  namespace: ridesharing
+  labels:
+    app: spark-streaming
+spec:
+  replicas: 1           # Spark structured streaming runs as a single driver
+  selector:
+    matchLabels:
+      app: spark-streaming
+  template:
+    metadata:
+      labels:
+        app: spark-streaming
+    spec:
+      serviceAccountName: spark-sa
+      containers:
+        - name: spark-streaming
+          image: ridesharing-pipeline:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - spark-submit
+            - --master
+            - local[4]
+            - --jars
+            - /app/jars/spark-sql-kafka.jar,/app/jars/kafka-clients.jar,/app/jars/spark-token-provider-kafka.jar,/app/jars/commons-pool2.jar
+            - src/spark_streaming_job.py
+          envFrom:
+            - configMapRef:
+                name: pipeline-config
+          env:
+            - name: SCALE_LEVEL
+              value: "5K"
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: aws-credentials
+                  key: access-key-id
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: aws-credentials
+                  key: secret-access-key
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "500m"
+            limits:
+              memory: "4Gi"
+              cpu: "2000m"
+          ports:
+            - containerPort: 4040
+              name: spark-ui
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 4040
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            failureThreshold: 5
+          volumeMounts:
+            - name: checkpoints
+              mountPath: /tmp/spark-checkpoints
+      volumes:
+        - name: checkpoints
+          emptyDir: {}
+---
+# Spark UI service — useful during demos / debugging
+apiVersion: v1
+kind: Service
+metadata:
+  name: spark-ui
+  namespace: ridesharing
+spec:
+  type: NodePort
+  selector:
+    app: spark-streaming
+  ports:
+    - name: spark-ui
+      port: 4040
+      targetPort: 4040
+      nodePort: 30404
+---
+# ServiceAccount for IAM role annotation (IRSA on EKS)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: spark-sa
+  namespace: ridesharing
+  annotations:
+    # Replace with your actual EKS IAM role ARN
+    eks.amazonaws.com/role-arn: "arn:aws:iam::ACCOUNT_ID:role/ridesharing-spark-role"
