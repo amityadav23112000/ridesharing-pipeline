@@ -1,35 +1,44 @@
 # Scale 1 Experiment Results
-# Date: 2026-04-07
-# Infrastructure: Local Ubuntu laptop (11GB RAM, 8 cores)
-# Drivers: 5,000 across 10 Indian cities
+# Date: 2026-04-11
+# Infrastructure: Local laptop (Ubuntu 24.04, 11GB RAM, 8 cores)
+# Simulator: localhost Kafka
+# Processor: Spark local[4] on laptop
 
 SCALE1_RESULTS = {
     "experiment":                "Scale 1 - City Level",
-    "date":                      "2026-04-07",
-    "infrastructure":            "Local Ubuntu 24.04, 11GB RAM, 8 cores",
+    "date":                      "2026-04-11",
+    "infrastructure":            "Local laptop Ubuntu 24.04",
     "drivers":                   5000,
     "cities":                    10,
     "drivers_per_city":          500,
-    "events_per_minute":         1400,
-    "events_per_second":         23,
-    "avg_latency_ms":            9500,
-    "min_latency_ms":            2552,
-    "max_latency_ms":            13083,
-    "window_size_sec":           10,
-    "flush_time_ms":             100,
-    "brokers":                   3,
-    "partitions_per_topic":      10,
+
+    # Kafka ingestion
+    "kafka_eps_avg":             757.0,
+    "kafka_eps_min":             598.0,
+    "kafka_eps_max":             819.0,
+
+    # Demand metrics
+    "avg_waiting_riders":        1935.0,
+    "avg_demand_ratio":          1.312,
+    "avg_surge_zones":           55.0,
+    "min_surge_zones":           48.0,
+    "max_surge_zones":           60.0,
+
+    # Window
+    "window_size_sec":           5,
+
+    # Infrastructure
+    "spark_master":              "local[4]",
+    "spark_driver_memory":       "2g",
+    "kafka_brokers":             3,
+    "kafka_partitions":          10,
     "replication_factor":        3,
-    "total_surge_records":       4628,
-    "max_surge_multiplier":      3.0,
-    "window_switched":           "30s -> 10s at 1770 ev/min",
-    "infrastructure_cost_usd":   0.0,
-    "cost_per_million_events":   0.0,
+    "infrastructure_cost":       0.0,
 }
 
 if __name__ == "__main__":
     print("=" * 55)
-    print("SCALE 1 EXPERIMENT RESULTS")
+    print("SCALE 1 RESULTS — 5K DRIVERS ON LAPTOP")
     print("=" * 55)
     for k, v in SCALE1_RESULTS.items():
         print(f"  {k:<35} {v}")

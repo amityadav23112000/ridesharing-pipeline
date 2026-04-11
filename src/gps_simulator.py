@@ -97,7 +97,9 @@ def make_event(driver_id, city_id, zone_num):
     }
 
 def create_producer():
-    brokers = ['localhost:9092','localhost:9093','localhost:9094']
+    import os
+    brokers_env = os.getenv('KAFKA_BROKERS', 'localhost:9092,localhost:9093,localhost:9094')
+    brokers = brokers_env.split(',')
     for attempt in range(10):
         try:
             p = KafkaProducer(
