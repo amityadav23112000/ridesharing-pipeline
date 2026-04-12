@@ -33,7 +33,7 @@ spec:
                 name: pipeline-config
           env:
             - name: NUM_DRIVERS
-              value: "5000"           # override per scale: 5000 / 50000 / 500000
+              value: "50000"          # Scale 2: 50K drivers
           resources:
             requests:
               memory: "256Mi"
