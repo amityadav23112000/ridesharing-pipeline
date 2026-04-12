@@ -20,7 +20,18 @@ from pyspark.sql.types import (
     StructType, StructField, StringType,
     IntegerType, DoubleType
 )
-from prometheus_client import Counter, Gauge, start_http_server
+try:
+    from prometheus_client import Counter, Gauge, start_http_server
+    _PROM_AVAILABLE = True
+except ImportError:
+    _PROM_AVAILABLE = False
+    # Stub no-ops so the rest of the code doesn't need to check
+    class _Noop:
+        def inc(self, *a, **k): pass
+        def set(self, *a, **k): pass
+    def Counter(*a, **k): return _Noop()
+    def Gauge(*a, **k): return _Noop()
+    def start_http_server(*a, **k): pass
 
 # ── PROMETHEUS METRICS (exposed on port 8001) ──
 prom_events_processed    = Counter('spark_events_processed_total',
@@ -228,23 +239,29 @@ def create_spark_session():
     """
     Create SparkSession with Kafka connector JARs.
     Master is set via spark-submit --master flag.
+    On EMR, JARs are provided via --packages; local JAR loading is skipped.
     """
-    jars = ','.join([
+    import os as _os
+    jar_files = [
         f"{JAR_PATH}/spark-sql-kafka.jar",
         f"{JAR_PATH}/kafka-clients.jar",
         f"{JAR_PATH}/spark-token-provider-kafka.jar",
         f"{JAR_PATH}/commons-pool2.jar",
-    ])
+    ]
+    existing_jars = [j for j in jar_files if _os.path.isfile(j)]
+    jars = ','.join(existing_jars) if existing_jars else None
 
-    spark = (SparkSession.builder
+    builder = (SparkSession.builder
         .appName(f"RidesharingSurge-{SCALE_LEVEL}")
-        .config("spark.jars", jars)
         .config("spark.sql.streaming.checkpointLocation",
                 CHECKPOINT_DIR)
         .config("spark.streaming.backpressure.enabled", "true")
         .config("spark.sql.shuffle.partitions", "10")
-        .getOrCreate()
     )
+    if jars:
+        builder = builder.config("spark.jars", jars)
+
+    spark = builder.getOrCreate()
     spark.sparkContext.setLogLevel("WARN")
     return spark
 
