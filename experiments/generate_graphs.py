@@ -23,9 +23,9 @@ OUT = os.path.join(os.path.dirname(__file__), "graphs")
 os.makedirs(OUT, exist_ok=True)
 
 # ── Shared data ────────────────────────────────────────────────────────────────
-keys   = ["Scale1-Laptop", "Scale1-EC2", "Scale2-EC2"]
-labels = ["Scale1-Laptop", "Scale1-EC2", "Scale2-EC2"]
-colors = ["#4C9BE8", "#4CAF50", "#FF9800"]   # blue, green, orange
+keys   = ["Scale1-Laptop", "Scale1-EC2", "Scale2-EC2", "Scale3-EMR"]
+labels = ["Scale1-Laptop", "Scale1-EC2", "Scale2-EC2", "Scale3-EMR"]
+colors = ["#4C9BE8", "#4CAF50", "#FF9800", "#E040FB"]   # blue, green, orange, purple
 
 eps  = [experiments[k]["kafka_eps_avg"]    for k in keys]
 lavg = [experiments[k]["latency_avg_ms"] / 1000 for k in keys]
@@ -133,10 +133,9 @@ fig, ax = plt.subplots(figsize=(8, 6))
 
 point_colors = colors
 
+offsets = [(-0.025, 4), (0.008, 4), (0.008, -12), (0.008, 8)]
 for i, (lbl, c, h, la) in enumerate(zip(labels, cost, lavg, point_colors)):
     ax.scatter(c, h, s=220, color=la, edgecolors="white", linewidths=1.2, zorder=4)
-    # Offset labels to avoid overlap
-    offsets = [(-0.010, 4), (0.004, 4), (0.004, -8)]
     ox, oy = offsets[i]
     ax.annotate(lbl, (c, h), xytext=(c + ox, h + oy),
                 fontsize=10, fontweight="bold", color="white",
@@ -146,11 +145,74 @@ ax.set_xlabel("Cost per Hour ($)", fontsize=11)
 ax.set_ylabel("Avg E2E Latency (seconds)", fontsize=11)
 ax.set_title("Cost vs Latency Trade-off", fontsize=14, fontweight="bold", pad=14)
 ax.grid(alpha=0.25, zorder=0)
-ax.set_xlim(-0.03, max(cost) * 1.4)
-ax.set_ylim(-10, max(lavg) * 1.25)
+ax.set_xlim(-0.10, max(cost) * 1.15)
+ax.set_ylim(-20, max(lavg) * 1.3)
 sns.despine(ax=ax, left=False, bottom=False)
 
 save(fig, "cost_vs_latency.png")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# GRAPH 6 — Infrastructure Scaling: Throughput vs Latency
+# ══════════════════════════════════════════════════════════════════════════════
+fig, ax1 = plt.subplots(figsize=(10, 6))
+
+infra_labels = ["Scale1-Laptop", "Scale1-EC2", "Scale2-EC2", "Scale3-EMR"]
+infra_eps    = [experiments[k]["kafka_eps_avg"]        for k in infra_labels]
+infra_lavg   = [experiments[k]["latency_avg_ms"] / 1000 for k in infra_labels]
+infra_colors = ["#4C9BE8", "#4CAF50", "#FF9800", "#E040FB"]
+xi = np.arange(len(infra_labels))
+
+# Bar chart — EPS (left y-axis)
+bars = ax1.bar(xi, infra_eps, color=infra_colors, width=0.5,
+               edgecolor="white", linewidth=0.6, alpha=0.85, zorder=3)
+ax1.set_ylabel("Kafka EPS (events / second)", fontsize=11, color="#4C9BE8")
+ax1.tick_params(axis="y", labelcolor="#4C9BE8")
+ax1.set_xticks(xi)
+ax1.set_xticklabels(infra_labels, fontsize=11)
+ax1.set_ylim(0, max(infra_eps) * 1.35)
+ax1.grid(axis="y", alpha=0.2, zorder=0)
+
+for bar, val in zip(bars, infra_eps):
+    ax1.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 40,
+             f"{val:.0f}", ha="center", va="bottom", fontsize=10,
+             fontweight="bold", color="white")
+
+# Line chart — Avg Latency (right y-axis)
+ax2 = ax1.twinx()
+ax2.plot(xi, infra_lavg, color="#FF4444", marker="o", markersize=9,
+         linewidth=2.5, linestyle="-", label="Avg Latency (s)", zorder=4)
+ax2.set_ylabel("Avg E2E Latency (seconds)", fontsize=11, color="#FF4444")
+ax2.tick_params(axis="y", labelcolor="#FF4444")
+ax2.set_ylim(0, max(infra_lavg) * 1.35)
+
+for i, val in enumerate(infra_lavg):
+    ax2.text(xi[i] + 0.18, val + 4, f"{val:.1f}s",
+             ha="left", va="bottom", fontsize=9, color="#FF4444")
+
+# Annotation: 4.5× latency improvement EC2 vs Laptop
+laptop_lat = experiments["Scale1-Laptop"]["latency_avg_ms"] / 1000
+ec2_lat    = experiments["Scale1-EC2"]["latency_avg_ms"] / 1000
+improvement = round(laptop_lat / ec2_lat, 1)
+ax2.annotate(
+    f"{improvement}× latency improvement\nEC2 vs Laptop",
+    xy=(1, ec2_lat), xytext=(1.25, ec2_lat + 50),
+    fontsize=9, color="white",
+    arrowprops=dict(arrowstyle="->", color="white", lw=1.2),
+    bbox=dict(boxstyle="round,pad=0.3", facecolor="#333333", edgecolor="white", alpha=0.8),
+)
+
+ax1.set_title("Infrastructure Scaling: Throughput vs Latency",
+              fontsize=14, fontweight="bold", pad=14)
+
+# Combined legend
+bar_patch = mpatches.Patch(color="#4C9BE8", label="Kafka EPS (bars)")
+line_patch = mpatches.Patch(color="#FF4444", label="Avg Latency (line)")
+ax1.legend(handles=[bar_patch, line_patch], fontsize=10, loc="upper left")
+
+sns.despine(ax=ax1, left=False, bottom=False)
+fig.tight_layout()
+save(fig, "infrastructure_scaling.png")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -214,4 +276,4 @@ for ax in axes.flat:
 plt.tight_layout()
 save(fig, "dashboard.png")
 
-print("\nAll 5 graphs generated successfully.")
+print("\nAll 6 graphs generated successfully.")

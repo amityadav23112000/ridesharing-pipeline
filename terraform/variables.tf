@@ -16,6 +16,12 @@ variable "student_id" {
   default     = "h20250060"
 }
 
+variable "bucket_name" {
+  description = "S3 bucket name — must be globally unique; matches existing bucket"
+  type        = string
+  default     = "ridesharing-pipeline-h20250060"
+}
+
 variable "surge_table_name" {
   description = "DynamoDB table for surge pricing results"
   type        = string

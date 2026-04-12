@@ -1,0 +1,47 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: batch-uploader
+  namespace: ridesharing
+  labels:
+    app: batch-uploader
+spec:
+  # Run every 5 minutes — uploads DynamoDB data to S3 Parquet
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: batch-uploader
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: batch-uploader
+              image: ridesharing-pipeline:latest
+              imagePullPolicy: IfNotPresent
+              command: ["python", "src/batch_uploader.py"]
+              envFrom:
+                - configMapRef:
+                    name: pipeline-config
+              env:
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: aws-credentials
+                      key: access-key-id
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: aws-credentials
+                      key: secret-access-key
+              resources:
+                requests:
+                  memory: "256Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "512Mi"
+                  cpu: "500m"

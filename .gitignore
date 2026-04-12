@@ -1,4 +1,4 @@
-# Python virtual environment — never commit this
+# Python virtual environment
 venv/
 
 # Python cache files
@@ -6,6 +6,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.egg-info/
 
 # Environment variables — contains secrets
 .env
@@ -13,11 +14,13 @@ __pycache__/
 # AWS credentials — never commit
 .aws/
 
-# Checkpoints — large Flink recovery files
+# Checkpoints — large Spark recovery files
 checkpoints/
 
-# Temporary data files
+# Temporary / scratch data
 data/
+tmp/
+temp/
 
 # Logs
 logs/
@@ -26,31 +29,31 @@ logs/
 # OS files
 .DS_Store
 Thumbs.db
-# Terraform
-.terraform/
-*.tfstate
-*.tfstate.backup
-.terraform.lock.hcl
 
-# Large files
-lambda/*.zip
-*.jar
-jars/
-
-# Python
-__pycache__/
-*.pyc
-venv/
-*.egg-info/
-
-# Docker
-.docker/
+# Terraform state & lock — managed separately, may contain sensitive output
 .terraform/
 terraform/.terraform/
 *.tfstate
 *.tfstate.backup
-venv/
-__pycache__/
-*.pyc
+.terraform.lock.hcl
+
+# Large / generated files
 jars/
 lambda/*.zip
+*.zip
+
+# Generated graphs — regenerated on demand via experiments/generate_graphs.py
+experiments/graphs/*.png
+
+# Node modules
+node_modules/
+
+# Docker
+.docker/
+
+# Claude IDE config
+.claude.json
+.claude/
+
+# Minikube local state
+.minikube/
