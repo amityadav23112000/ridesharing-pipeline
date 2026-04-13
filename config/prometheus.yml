@@ -7,6 +7,10 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
-  - job_name: 'pipeline_metrics'
+  - job_name: 'gps_simulator'
     static_configs:
-      - targets: ['172.20.10.2:8000']
+      - targets: ['host.docker.internal:8000']   # GPS simulator metrics (port 8000)
+
+  - job_name: 'spark_streaming'
+    static_configs:
+      - targets: ['host.docker.internal:8001']   # Spark streaming metrics (port 8001)

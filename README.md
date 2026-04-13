@@ -593,20 +593,64 @@ EMR 3×m5.xlarge (12 vCPU, 48 GB) processes the first batch in **24 seconds** vs
 
 ## Monitoring
 
+### Verified Service Status (2026-04-13)
+
+All observability services confirmed working on Minikube (Kubernetes):
+
+| Service | Status | Metric sample |
+|---------|--------|---------------|
+| Prometheus | UP — scraping 3 targets | `spark_kafka_events_per_second = 2000` |
+| Grafana | UP — datasource connected | Dashboard imported and live |
+| GPS Simulator metrics | UP (port 8000) | `gps_events_sent_total` across 10 cities × 3 topics |
+| Spark Streaming metrics | UP (port 8001) | `spark_active_surge_zones = 31`, `spark_batch_latency_ms = 3977` |
+
 ### Grafana (Kubernetes)
+
 ```bash
 kubectl port-forward svc/grafana -n ridesharing 3000:3000
-# Open: http://localhost:3000  (admin / admin)
-# Import: config/grafana_dashboard.json
 ```
 
+Open: http://localhost:3000
+- **Username:** `admin`
+- **Password:** `ridesharing123`
+
+The dashboard **"Ridesharing Pipeline — Kafka & Spark Metrics"** is pre-imported.
+To re-import manually: Dashboards → Import → Upload `config/grafana_dashboard.json` → select **Prometheus** datasource.
+
+**Live panels:**
+| Panel | Prometheus Query |
+|-------|-----------------|
+| Kafka Events per Second | `spark_kafka_events_per_second` |
+| GPS Events Rate | `rate(gps_events_sent_total[1m])` |
+| Active Surge Zones | `spark_active_surge_zones` |
+| Batch Latency (ms) | `spark_batch_latency_ms` |
+| Total Events Processed | `spark_events_processed_total` |
+| Active Drivers | `active_drivers_count` |
+
 ### Prometheus
+
 ```bash
 kubectl port-forward svc/prometheus -n ridesharing 9090:9090
-# Open: http://localhost:9090
+```
+
+Open: http://localhost:9090
+
+**Scrape targets** (all UP):
+- `gps-simulator` → `gps-simulator.ridesharing.svc.cluster.local:8000`
+- `spark-streaming` → `spark-metrics.ridesharing.svc.cluster.local:8001`
+- `prometheus` → self
+
+**Quick verification queries:**
+```
+spark_kafka_events_per_second
+spark_active_surge_zones
+spark_batch_latency_ms
+rate(gps_events_sent_total[1m])
+active_drivers_count
 ```
 
 ### Spark UI
+
 ```bash
 minikube service spark-ui -n ridesharing
 # Or: http://$(minikube ip):30404
@@ -616,6 +660,17 @@ minikube service spark-ui -n ridesharing
 - Navigate to: CloudWatch → Dashboards → `RidesharingPipeline`
 - Alarms: high latency (> 10s), low throughput (< 10 EPS)
 - Log groups: `/aws/lambda/surge-alert`, `/ridesharing/spark-streaming`
+
+### Note on Docker Compose mode
+
+The `docker compose` v2 plugin is required (not `docker-compose` v1). Install with:
+```bash
+sudo apt-get install docker-compose-plugin   # Ubuntu/Debian
+# or
+sudo apt-get install docker-compose-v2
+```
+
+The `config/prometheus.yml` targets use `host.docker.internal` to reach metric servers running on the host. On Linux, add `--add-host=host.docker.internal:host-gateway` if this does not resolve.
 
 ---
 
