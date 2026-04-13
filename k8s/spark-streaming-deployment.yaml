@@ -36,7 +36,10 @@ spec:
                 name: pipeline-config
           env:
             - name: SCALE_LEVEL
-              value: "50K"
+              valueFrom:
+                configMapKeyRef:
+                  name: pipeline-config
+                  key: SCALE_LEVEL
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:

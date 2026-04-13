@@ -13,3 +13,4 @@ data:
   AWS_REGION: "ap-south-1"
   CHECKPOINT_DIR: "/tmp/spark-checkpoints"
   JAR_PATH: "/app/jars"
+  S3_BUCKET: "ridesharing-pipeline-h20250060"

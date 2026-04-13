@@ -33,7 +33,10 @@ spec:
                 name: pipeline-config
           env:
             - name: NUM_DRIVERS
-              value: "50000"          # Scale 2: 50K drivers
+              valueFrom:
+                configMapKeyRef:
+                  name: pipeline-config
+                  key: NUM_DRIVERS
           resources:
             requests:
               memory: "256Mi"
