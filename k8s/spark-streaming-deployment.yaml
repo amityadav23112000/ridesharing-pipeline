@@ -50,10 +50,10 @@ spec:
           resources:
             requests:
               memory: "2Gi"
-              cpu: "500m"
+              cpu: "1000m"
             limits:
-              memory: "4Gi"
-              cpu: "2000m"
+              memory: "6Gi"
+              cpu: "3000m"
           ports:
             - containerPort: 4040
               name: spark-ui

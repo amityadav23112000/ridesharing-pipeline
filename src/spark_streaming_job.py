@@ -77,6 +77,7 @@ GPS_SCHEMA = StructType([
     StructField("status",            StringType()),
     StructField("battery_pct",       IntegerType()),
     StructField("zone_demand_ratio", DoubleType()),
+    StructField("event_timestamp",   StringType(), True),
 ])
 
 # ── SURGE RULES ──
@@ -325,6 +326,7 @@ def run():
     #   WINDOW_SECONDS=120 → less CPU at off-peak
     surge_agg = (parsed
         .withWatermark("kafka_ts", "30 seconds")
+        .withWatermark("event_timestamp", "30 seconds")
         .groupBy(
             col("zone_id"),
             col("city_id"),
