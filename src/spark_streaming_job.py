@@ -326,7 +326,6 @@ def run():
     #   WINDOW_SECONDS=120 → less CPU at off-peak
     surge_agg = (parsed
         .withWatermark("kafka_ts", "30 seconds")
-        .withWatermark("event_timestamp", "30 seconds")
         .groupBy(
             col("zone_id"),
             col("city_id"),
