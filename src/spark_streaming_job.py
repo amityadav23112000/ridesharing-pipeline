@@ -61,8 +61,7 @@ AWS_REGION     = os.getenv('AWS_DEFAULT_REGION', 'ap-south-1')
 SCALE_LEVEL    = os.getenv('SCALE_LEVEL', '5K')
 CHECKPOINT_DIR = os.getenv('CHECKPOINT_DIR',
                  '/tmp/spark-checkpoints/surge')
-JAR_PATH       = os.getenv('JAR_PATH',
-                 '/home/amit-ydav/ridesharing-pipeline/jars')
+JAR_PATH       = os.getenv('JAR_PATH', '/app/jars')
 
 # ── GPS EVENT SCHEMA ──
 GPS_SCHEMA = StructType([

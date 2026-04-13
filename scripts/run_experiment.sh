@@ -190,9 +190,15 @@ PYEOF
   export PATH="$HOME/bin:$PATH"
   minikube stop 2>/dev/null || true
   cd config && docker compose down 2>/dev/null || true && cd ..
-  aws ec2 stop-instances \
-    --instance-ids i-025a96da21c7bf6a6 \
-    --region ap-south-1 2>/dev/null || true
+  # Replace EC2_INSTANCE_ID with your actual instance ID from the AWS console
+  EC2_INSTANCE_ID="${EC2_INSTANCE_ID:-}"
+  if [ -n "$EC2_INSTANCE_ID" ]; then
+    aws ec2 stop-instances \
+      --instance-ids "$EC2_INSTANCE_ID" \
+      --region ap-south-1 2>/dev/null || true
+  else
+    echo "  (skipping EC2 stop — set EC2_INSTANCE_ID env var to stop your instance)"
+  fi
   echo ""
   echo "✓ All services stopped."
   ;;

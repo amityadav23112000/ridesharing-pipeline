@@ -33,7 +33,7 @@ def lambda_handler(event, context):
         surge      = float(new_image.get('surge_multiplier', {}).get('N', '1.0'))
         waiting    = int(new_image.get('waiting_riders',     {}).get('N', '0'))
         available  = int(new_image.get('available_drivers',  {}).get('N', '0'))
-        latency    = float(new_image.get('processing_latency_ms', {}).get('N', '0'))
+        latency    = float(new_image.get('e2e_latency_ms', {}).get('N', '0'))
         scale      = new_image.get('scale_level', {}).get('S', 'unknown')
 
         # ALERT 1: High surge pricing
