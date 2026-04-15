@@ -133,6 +133,11 @@ def run_city_simulator(city_id, drivers, producer, stats):
         sent     = 0
         errors   = 0
 
+        # Spread events evenly across the 10s cycle to avoid bursty timestamps.
+        # Without this, all events are created at t=0 of the cycle, making
+        # min_event_ts stale by up to 10s — killing sub-5s latency.
+        inter_event_delay = 10.0 / max(len(drivers), 1)
+
         for driver in drivers:
             if random.random() < 0.1:
                 driver['zone'] = random.randint(
@@ -153,6 +158,9 @@ def run_city_simulator(city_id, drivers, producer, stats):
                 errors += 1
                 events_failed.labels(reason=type(e).__name__).inc()
 
+            # Sleep between events to spread timestamps across the cycle
+            time.sleep(inter_event_delay)
+
         producer.flush()
 
         # Update shared stats
@@ -167,15 +175,12 @@ def run_city_simulator(city_id, drivers, producer, stats):
                 f"errors={errors} total={city_events}"
             )
 
-        # Sleep remainder of 10 second cycle
-        elapsed = time.time() - cycle_start
-        time.sleep(max(0, 10 - elapsed))
-
-def run(num_drivers):
+def run(num_drivers, duration_seconds=None):
     """
     Main entry point.
     Distributes drivers across cities.
     Starts one thread per city for parallel simulation.
+    duration_seconds: if set, simulator auto-exits after this many seconds.
     """
     # Start Prometheus metrics
     start_http_server(8000)
@@ -229,13 +234,19 @@ def run(num_drivers):
                     f"({drivers_per_city:,} drivers)")
 
     logger.info(f"All {len(CITIES)} city simulators running.")
+    if duration_seconds:
+        logger.info(f"Auto-stop after {duration_seconds}s.")
     logger.info("Press Ctrl+C to stop.")
     logger.info(f"{'='*55}")
 
-    # Main thread: print summary every 30 seconds
-    last_sent = 0
+    # Main thread: print summary every 30 seconds, auto-stop if duration set
+    last_sent  = 0
+    start_time = time.time()
     while True:
         time.sleep(30)
+        if duration_seconds and (time.time() - start_time) >= duration_seconds:
+            logger.info(f"Duration {duration_seconds}s reached — stopping simulator.")
+            break
         with stats['lock']:
             sent_now = stats['total_sent']
             rate     = (sent_now - last_sent) / 30
@@ -251,6 +262,7 @@ def run(num_drivers):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description='GPS Simulator for ride-sharing pipeline'
+
     )
     parser.add_argument(
         '--drivers',
@@ -258,5 +270,11 @@ if __name__ == "__main__":
         default=500,
         help='Number of drivers to simulate (default: 500)'
     )
+    parser.add_argument(
+        '--duration',
+        type=int,
+        default=None,
+        help='Auto-stop after this many seconds (default: run forever)'
+    )
     args = parser.parse_args()
-    run(args.drivers)
+    run(args.drivers, duration_seconds=args.duration)
