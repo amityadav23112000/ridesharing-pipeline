@@ -17,8 +17,9 @@ __pycache__/
 # Checkpoints — large Spark recovery files
 checkpoints/
 
-# Temporary / scratch data
-data/
+# Temporary / scratch data — allow real dataset CSV but exclude large parquet
+data/real/*.parquet
+data/real/nyc_taxi_jan2024*
 tmp/
 temp/
 
@@ -42,8 +43,8 @@ jars/
 lambda/*.zip
 *.zip
 
-# Generated graphs — regenerated on demand via experiments/generate_graphs.py
-experiments/graphs/*.png
+# Generated graphs — tracked in repo for submission evidence
+# experiments/graphs/*.png
 
 # Node modules
 node_modules/
