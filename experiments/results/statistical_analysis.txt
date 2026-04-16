@@ -1,0 +1,43 @@
+=================================================================
+RIDESHARING PIPELINE — STATISTICAL ANALYSIS
+=================================================================
+
+LATENCY SLA CHECK
+----------------------------------------
+  local_sub5s        avg=    3047ms  p95=    4328ms  <5s:PASS  <60s:PASS
+  local_1k           avg=    2767ms  p95=    3813ms  <5s:PASS  <60s:PASS
+  local_5k           avg=    5991ms  p95=    6675ms  <5s:FAIL  <60s:PASS
+  ec2_5k             avg=    5847ms  p95=    6147ms  <5s:FAIL  <60s:PASS
+  ec2_50k            avg=   20630ms  p95=   33374ms  <5s:FAIL  <60s:PASS
+  emr_50k            avg=   75238ms  p95=  132500ms  <5s:FAIL  <60s:FAIL
+
+THROUGHPUT SUMMARY
+----------------------------------------
+  local_sub5s            60.7 EPS
+  local_1k              105.0 EPS
+  local_5k              464.2 EPS
+  ec2_5k                470.1 EPS
+  ec2_50k              1836.8 EPS
+  emr_50k              2045.7 EPS
+
+COST EFFICIENCY (EPS per $/hr)
+----------------------------------------
+  local_sub5s          FREE (local)
+  local_1k             FREE (local)
+  local_5k             FREE (local)
+  ec2_5k               2350.5 EPS/$
+  ec2_50k              9184.0 EPS/$
+  emr_50k              1636.6 EPS/$
+
+PEARSON CORRELATION: drivers vs avg latency
+----------------------------------------
+  r = 0.793  p-value = 0.0597
+  Correlation is not significant at alpha=0.05
+
+INNOVATION 1: ADAPTIVE WINDOW IMPACT
+----------------------------------------
+  local_5k (5s window): 5991ms
+  local_sub5s (2s window): 3047ms
+  Latency reduction: 49.1%
+
+=================================================================
