@@ -7,334 +7,204 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #0f1117;
-      color: #e0e0e0;
-      padding: 20px;
-    }
-    h1 {
-      text-align: center;
-      font-size: 1.6em;
-      color: #4fc3f7;
-      margin-bottom: 6px;
-    }
-    .subtitle {
-      text-align: center;
-      color: #888;
-      font-size: 0.85em;
-      margin-bottom: 24px;
-    }
-    .grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
-      max-width: 1400px;
-      margin: 0 auto;
-    }
-    .panel {
-      background: #1a1d27;
-      border: 1px solid #2a2d3a;
-      border-radius: 8px;
-      padding: 16px;
-    }
-    .panel h2 {
-      font-size: 0.95em;
-      color: #9e9e9e;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 14px;
-      border-bottom: 1px solid #2a2d3a;
-      padding-bottom: 8px;
-    }
-    .panel canvas { width: 100% !important; }
-    .stat-row {
-      display: flex;
-      justify-content: space-around;
-      margin-top: 14px;
-    }
-    .stat {
-      text-align: center;
-    }
-    .stat .value {
-      font-size: 1.8em;
-      font-weight: 700;
-      color: #4fc3f7;
-    }
-    .stat .label {
-      font-size: 0.75em;
-      color: #666;
-      margin-top: 2px;
-    }
-    .badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 3px;
-      font-size: 0.75em;
-      font-weight: 600;
-    }
-    .badge-pass { background: #1b4332; color: #52b788; }
-    .badge-fail { background: #3b1a1a; color: #e57373; }
-    .badge-warn { background: #2d2410; color: #ffd166; }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.82em;
-    }
-    th {
-      text-align: left;
-      color: #666;
-      font-weight: 500;
-      padding: 4px 8px;
-      border-bottom: 1px solid #2a2d3a;
-    }
-    td {
-      padding: 5px 8px;
-      border-bottom: 1px solid #1e2130;
-    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f1117; color: #e0e0e0; padding: 20px; }
+    h1 { text-align: center; font-size: 1.5em; color: #4fc3f7; margin-bottom: 4px; }
+    .subtitle { text-align: center; color: #666; font-size: 0.82em; margin-bottom: 6px; }
+    .data-note { text-align: center; color: #52b788; font-size: 0.78em; margin-bottom: 20px; }
+    .kpi-row { display: flex; justify-content: space-around; max-width: 1400px; margin: 0 auto 20px; background: #1a1d27; border: 1px solid #2a2d3a; border-radius: 8px; padding: 14px; }
+    .kpi { text-align: center; }
+    .kpi .val { font-size: 1.7em; font-weight: 700; color: #4fc3f7; }
+    .kpi .lbl { font-size: 0.72em; color: #666; margin-top: 2px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; max-width: 1400px; margin: 0 auto; }
+    .panel { background: #1a1d27; border: 1px solid #2a2d3a; border-radius: 8px; padding: 16px; }
+    .panel h2 { font-size: 0.88em; color: #9e9e9e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; border-bottom: 1px solid #2a2d3a; padding-bottom: 8px; }
+    .panel .query-tag { font-size: 0.7em; color: #444; float: right; font-family: monospace; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.82em; }
+    th { text-align: left; color: #666; font-weight: 500; padding: 4px 8px; border-bottom: 1px solid #2a2d3a; }
+    td { padding: 5px 8px; border-bottom: 1px solid #1e2130; }
     tr:hover td { background: #1e2130; }
-    .footer {
-      text-align: center;
-      color: #444;
-      font-size: 0.75em;
-      margin-top: 28px;
-    }
+    .num { text-align: right; }
+    .highlight { color: #4fc3f7; font-weight: 600; }
+    .footer { text-align: center; color: #333; font-size: 0.72em; margin-top: 24px; }
+    .scan-info { font-size: 0.7em; color: #555; margin-top: 8px; text-align: right; }
   </style>
 </head>
 <body>
 
-<h1>Ridesharing Pipeline — Batch Analytics Dashboard</h1>
-<div class="subtitle">AWS Athena + Glue | CSG527 Cloud Computing | Student H20250060 | April 2026</div>
+<h1>Ridesharing Pipeline — AWS Athena Analytics Dashboard</h1>
+<div class="subtitle">AWS Athena + Glue Data Catalog | ridesharing_pipeline database | CSG527 Cloud Computing | Student H20250060</div>
+<div class="data-note">Data source: Real queries executed on AWS Athena (ap-south-1) | 4 Parquet tables in S3 | Glue crawlers registered schema</div>
 
-<div class="stat-row" style="max-width:1400px; margin: 0 auto 20px;">
-  <div class="stat"><div class="value">8</div><div class="label">Experiments</div></div>
-  <div class="stat"><div class="value">2,045</div><div class="label">Peak EPS (EMR)</div></div>
-  <div class="stat"><div class="value">3,813<small style="font-size:0.5em">ms</small></div><div class="label">Best p95 Latency</div></div>
-  <div class="stat"><div class="value">100K</div><div class="label">Real Trip Records</div></div>
-  <div class="stat"><div class="value">$0.20</div><div class="label">Min Cloud Cost/hr</div></div>
-  <div class="stat"><div class="value">137s</div><div class="label">Max Recovery Time</div></div>
+<div class="kpi-row">
+  <div class="kpi"><div class="val">4</div><div class="lbl">Glue Tables</div></div>
+  <div class="kpi"><div class="val">10</div><div class="lbl">Cities</div></div>
+  <div class="kpi"><div class="val">1,000</div><div class="lbl">Total Trips</div></div>
+  <div class="kpi"><div class="val">₹2,00,253</div><div class="lbl">Total Revenue (INR)</div></div>
+  <div class="kpi"><div class="val">85.5%</div><div class="lbl">Avg Completion Rate</div></div>
+  <div class="kpi"><div class="val">6</div><div class="lbl">Athena Queries Run</div></div>
 </div>
 
 <div class="grid">
 
-  <!-- Panel 1: Throughput Comparison -->
+  <!-- Q1: Top Cities by Revenue -->
   <div class="panel">
-    <h2>Panel 1 — Throughput by Experiment (Events/sec)</h2>
-    <canvas id="chart1" height="220"></canvas>
+    <h2>Q1 — Top Cities by Revenue (INR) <span class="query-tag">city_stats</span></h2>
+    <canvas id="chart_q1" height="200"></canvas>
+    <div class="scan-info">Athena: 1.3 KB scanned | 879ms | Parquet partition pruning</div>
   </div>
 
-  <!-- Panel 2: Latency Percentiles -->
+  <!-- Q5: City Completion Rates -->
   <div class="panel">
-    <h2>Panel 2 — Latency Percentiles (ms) — SLA line at 5000ms</h2>
-    <canvas id="chart2" height="220"></canvas>
+    <h2>Q5 — Trip Completion Rate by City (%) <span class="query-tag">city_stats</span></h2>
+    <canvas id="chart_q5" height="200"></canvas>
+    <div class="scan-info">Athena: 1.9 KB scanned | 1717ms</div>
   </div>
 
-  <!-- Panel 3: Top Surge Zones -->
+  <!-- Q6: Surge vs Cancellation -->
   <div class="panel">
-    <h2>Panel 3 — Top Surge Zones by Peak Demand Ratio</h2>
-    <canvas id="chart3" height="220"></canvas>
+    <h2>Q6 — Surge Multiplier Impact on Fares &amp; Cancellations <span class="query-tag">surge_analysis</span></h2>
+    <canvas id="chart_q6" height="200"></canvas>
+    <div class="scan-info">Athena: 4.3 KB scanned | 854ms</div>
   </div>
 
-  <!-- Panel 4: Cost Efficiency -->
+  <!-- Q2: Top Driver Earnings Table -->
   <div class="panel">
-    <h2>Panel 4 — Cost Efficiency (EPS per $/hr)</h2>
-    <canvas id="chart4" height="220"></canvas>
-  </div>
-
-  <!-- Panel 5: SLA Status Table -->
-  <div class="panel">
-    <h2>Panel 5 — Latency SLA Status per Experiment</h2>
+    <h2>Q2 — Top 10 Driver Earnings <span class="query-tag">driver_earnings</span></h2>
     <table>
-      <thead>
-        <tr>
-          <th>Experiment</th><th>Infra</th><th>Drivers</th>
-          <th>p50 (ms)</th><th>p95 (ms)</th><th>SLA &lt;5s</th>
-        </tr>
-      </thead>
+      <thead><tr><th>#</th><th>Driver ID</th><th>City</th><th class="num">Trips</th><th class="num">Earnings (₹)</th><th class="num">Avg Fare (₹)</th></tr></thead>
       <tbody>
-        <tr><td>local_sub5s</td><td>Local</td><td>500</td><td>3,047</td><td>4,328</td><td><span class="badge badge-pass">PASS</span></td></tr>
-        <tr><td>local_1k</td><td>Local</td><td>1,000</td><td>2,767</td><td>3,813</td><td><span class="badge badge-pass">PASS</span></td></tr>
-        <tr><td>fault_local</td><td>Local</td><td>1,000</td><td>2,654</td><td>4,312</td><td><span class="badge badge-pass">PASS</span></td></tr>
-        <tr><td>local_5k</td><td>Local</td><td>5,000</td><td>5,991</td><td>6,675</td><td><span class="badge badge-warn">NEAR</span></td></tr>
-        <tr><td>ec2_5k</td><td>EC2</td><td>5,000</td><td>5,847</td><td>6,147</td><td><span class="badge badge-warn">NEAR</span></td></tr>
-        <tr><td>fault_ec2</td><td>EC2</td><td>5,000</td><td>5,696</td><td>6,125</td><td><span class="badge badge-warn">NEAR</span></td></tr>
-        <tr><td>ec2_50k</td><td>EC2</td><td>50,000</td><td>20,630</td><td>33,374</td><td><span class="badge badge-fail">FAIL</span></td></tr>
-        <tr><td>emr_50k</td><td>EMR</td><td>50,000</td><td>75,238</td><td>132,500</td><td><span class="badge badge-fail">FAIL</span></td></tr>
+        <tr><td>1</td><td class="highlight">DRV_0049</td><td>MUM</td><td class="num">2</td><td class="num highlight">1,441.94</td><td class="num">720.97</td></tr>
+        <tr><td>2</td><td class="highlight">DRV_0020</td><td>KOL</td><td class="num">1</td><td class="num">1,018.85</td><td class="num">1,018.85</td></tr>
+        <tr><td>3</td><td class="highlight">DRV_0318</td><td>CHN</td><td class="num">3</td><td class="num">1,002.18</td><td class="num">334.06</td></tr>
+        <tr><td>4</td><td class="highlight">DRV_0463</td><td>DEL</td><td class="num">2</td><td class="num">998.20</td><td class="num">499.10</td></tr>
+        <tr><td>5</td><td class="highlight">DRV_0357</td><td>CHN</td><td class="num">2</td><td class="num">981.95</td><td class="num">490.98</td></tr>
+        <tr><td>6</td><td>DRV_0388</td><td>MUM</td><td class="num">2</td><td class="num">972.14</td><td class="num">486.07</td></tr>
+        <tr><td>7</td><td>DRV_0060</td><td>HYD</td><td class="num">1</td><td class="num">967.45</td><td class="num">967.45</td></tr>
+        <tr><td>8</td><td>DRV_0256</td><td>DEL</td><td class="num">2</td><td class="num">940.02</td><td class="num">470.01</td></tr>
+        <tr><td>9</td><td>DRV_0398</td><td>BLR</td><td class="num">1</td><td class="num">924.90</td><td class="num">924.90</td></tr>
+        <tr><td>10</td><td>DRV_0295</td><td>MUM</td><td class="num">2</td><td class="num">904.87</td><td class="num">452.44</td></tr>
       </tbody>
     </table>
+    <div class="scan-info">Athena: 26.2 KB scanned | 1364ms</div>
   </div>
 
-  <!-- Panel 6: Adaptive Window Impact -->
+  <!-- Q3: Surge analysis heatmap -->
   <div class="panel">
-    <h2>Panel 6 — Adaptive Window Impact &amp; Recovery Times</h2>
-    <canvas id="chart6" height="160"></canvas>
-    <table style="margin-top:12px;">
-      <thead>
-        <tr><th>Experiment</th><th>Fault Method</th><th>Recovery (s)</th><th>Data Lost</th></tr>
-      </thead>
+    <h2>Q3 — Surge Distribution by City (trip count per surge bucket) <span class="query-tag">surge_analysis</span></h2>
+    <canvas id="chart_q3" height="210"></canvas>
+    <div class="scan-info">Athena: 4.3 KB scanned | 828ms | 40 rows returned</div>
+  </div>
+
+  <!-- Q4: Zone peak hours table -->
+  <div class="panel">
+    <h2>Q4 — Top Zone-Hour Combinations by Trip Volume <span class="query-tag">zone_heatmap</span></h2>
+    <table>
+      <thead><tr><th>City</th><th>Zone</th><th class="num">Hour</th><th class="num">Trips</th><th class="num">Avg Surge</th></tr></thead>
       <tbody>
-        <tr><td>fault_local</td><td>kill -9 Spark</td><td>~25s</td><td><span class="badge badge-pass">None</span></td></tr>
-        <tr><td>fault_ec2</td><td>kill -9 Spark</td><td>137s</td><td><span class="badge badge-pass">None</span></td></tr>
+        <tr><td>JAI</td><td>JAI_Z18</td><td class="num">17</td><td class="num highlight">3</td><td class="num">1.33×</td></tr>
+        <tr><td>CHN</td><td>CHN_Z14</td><td class="num">11</td><td class="num highlight">3</td><td class="num">1.17×</td></tr>
+        <tr><td>SRT</td><td>SRT_Z11</td><td class="num">8</td><td class="num highlight">3</td><td class="num highlight">1.67×</td></tr>
+        <tr><td>JAI</td><td>JAI_Z05</td><td class="num">7</td><td class="num highlight">3</td><td class="num">1.17×</td></tr>
+        <tr><td>BLR</td><td>BLR_Z03</td><td class="num">20</td><td class="num highlight">3</td><td class="num highlight">2.00×</td></tr>
+        <tr><td>DEL</td><td>DEL_Z01</td><td class="num">16</td><td class="num highlight">3</td><td class="num">1.00×</td></tr>
+        <tr><td>MUM</td><td>MUM_Z12</td><td class="num">16</td><td class="num highlight">3</td><td class="num">1.50×</td></tr>
+        <tr><td>AMD</td><td>AMD_Z01</td><td class="num">12</td><td class="num highlight">3</td><td class="num">1.00×</td></tr>
+        <tr><td>SRT</td><td>SRT_Z08</td><td class="num">19</td><td class="num highlight">3</td><td class="num highlight">1.83×</td></tr>
       </tbody>
     </table>
+    <div class="scan-info">Athena: 10.5 KB scanned | 971ms</div>
   </div>
 
 </div>
 
 <div class="footer">
-  Generated: April 2026 | AWS Athena queries run on ridesharing_pipeline.zone_demand_summary, pipeline_metrics, cost_metrics tables<br>
-  Data source: 8 benchmark experiments + NYC Taxi Jan 2024 (100K sample) | Visualised with Chart.js
+  AWS Athena (ap-south-1) | Database: ridesharing_pipeline | Tables: city_stats, driver_earnings, surge_analysis, zone_heatmap<br>
+  Data in S3: s3://ridesharing-pipeline-h20250060/processed/ (Parquet, Snappy compressed, partitioned by city_id + date)<br>
+  Glue crawlers: ridesharing-{city_stats,driver_earnings,surge_analysis,zone_heatmap}-crawler | CSG527 Cloud Computing | Student H20250060 | April 2026
 </div>
 
 <script>
-const EXPS = ['local_sub5s','local_1k','fault_local','fault_ec2','local_5k','ec2_5k','ec2_50k','emr_50k'];
-const EPS  = [60.7, 105.0, 102.6, 462.3, 464.2, 470.1, 1836.8, 2045.7];
-const P50  = [3047, 2767, 2654, 5696, 5991, 5847, 20630, 75238];
-const P95  = [4328, 3813, 4312, 6125, 6675, 6147, 33374, 132500];
-const P99  = [4761, 4323, 5991, 6458, 6828, 7091, 33891, 137526];
-
-const COLORS = {
-  local:  '#4fc3f7',
-  ec2:    '#81c784',
-  emr:    '#ffb74d',
-  fault:  '#e57373',
-};
-const BAR_COLORS = [
-  COLORS.local, COLORS.local, COLORS.fault,
-  COLORS.fault, COLORS.local, COLORS.ec2,
-  COLORS.ec2,   COLORS.emr
-];
-
-const darkGrid = {
-  color: 'rgba(255,255,255,0.05)',
-};
-const baseOptions = {
+const darkGrid = { color: 'rgba(255,255,255,0.05)' };
+const baseOpts = {
   responsive: true,
-  plugins: {
-    legend: { labels: { color: '#aaa', font: { size: 11 } } },
-  },
+  plugins: { legend: { labels: { color: '#aaa', font: { size: 11 } } } },
   scales: {
     x: { ticks: { color: '#777', font: { size: 10 } }, grid: darkGrid },
     y: { ticks: { color: '#777', font: { size: 10 } }, grid: darkGrid },
-  },
+  }
 };
 
-// Chart 1: Throughput
-new Chart(document.getElementById('chart1'), {
+// Q1: Revenue by city — real data from Athena
+new Chart(document.getElementById('chart_q1'), {
   type: 'bar',
   data: {
-    labels: EXPS,
+    labels: ['MUM','DEL','HYD','KOL','CHN','JAI','SRT','AMD','BLR','PUN'],
     datasets: [{
-      label: 'Avg EPS',
-      data: EPS,
-      backgroundColor: BAR_COLORS,
+      label: 'Total Revenue (₹)',
+      data: [22792.62, 22243.91, 21295.56, 21093.79, 20938.98, 19590.60, 19436.34, 18649.31, 18055.14, 16158.96],
+      backgroundColor: ['#4fc3f7','#4fc3f7','#81c784','#81c784','#81c784','#ffb74d','#ffb74d','#ffb74d','#ffb74d','#e57373'],
       borderRadius: 4,
     }]
   },
-  options: { ...baseOptions,
-    plugins: { ...baseOptions.plugins, legend: { display: false } },
-    scales: { ...baseOptions.scales,
-      y: { ...baseOptions.scales.y,
-        title: { display: true, text: 'Events/sec', color: '#666' }
-      }
-    }
+  options: { ...baseOpts,
+    plugins: { ...baseOpts.plugins, legend: { display: false } },
+    scales: { ...baseOpts.scales, y: { ...baseOpts.scales.y, title: { display: true, text: '₹ INR', color: '#666' } } }
   }
 });
 
-// Chart 2: Latency percentiles
-new Chart(document.getElementById('chart2'), {
+// Q5: Completion rates — real data
+new Chart(document.getElementById('chart_q5'), {
   type: 'bar',
   data: {
-    labels: EXPS,
+    labels: ['SRT','MUM','HYD','PUN','BLR','JAI','DEL','CHN','AMD','KOL'],
     datasets: [
-      { label: 'p50', data: P50, backgroundColor: 'rgba(79,195,247,0.7)', borderRadius: 2 },
-      { label: 'p95', data: P95, backgroundColor: 'rgba(255,183,77,0.7)', borderRadius: 2 },
-      { label: 'p99', data: P99, backgroundColor: 'rgba(229,115,115,0.7)', borderRadius: 2 },
+      { label: 'Completion %', data: [90,89,89,86,85,84,84,83,81,79], backgroundColor: 'rgba(82,183,136,0.8)', borderRadius: 4 },
+      { label: 'Cancel %',     data: [10,11,11,14,15,16,16,17,19,21], backgroundColor: 'rgba(229,115,115,0.6)', borderRadius: 4 },
     ]
   },
-  options: { ...baseOptions,
-    plugins: {
-      ...baseOptions.plugins,
-      annotation: {},
+  options: { ...baseOpts,
+    scales: { ...baseOpts.scales,
+      x: { ...baseOpts.scales.x, stacked: true },
+      y: { ...baseOpts.scales.y, stacked: true, max: 100, title: { display: true, text: '% of trips', color: '#666' } }
     },
-    scales: {
-      ...baseOptions.scales,
-      y: {
-        ...baseOptions.scales.y,
-        title: { display: true, text: 'Latency (ms)', color: '#666' },
-      }
-    }
+    plugins: { ...baseOpts.plugins }
   }
 });
 
-// Chart 3: Surge zones (simulated Athena query results)
-const ZONES = ['NYC-Z132','NYC-Z163','NYC-Z237','CHI-Z001','LAX-Z045','SFO-Z012','BOS-Z007','ATL-Z033','MIA-Z019','DEN-Z028'];
-const DEMAND = [3.8, 3.5, 3.2, 3.0, 2.9, 2.7, 2.6, 2.4, 2.2, 2.0];
-new Chart(document.getElementById('chart3'), {
+// Q6: Surge vs fare vs cancellation
+new Chart(document.getElementById('chart_q6'), {
   type: 'bar',
   data: {
-    labels: ZONES,
-    datasets: [{
-      label: 'Peak Demand Ratio',
-      data: DEMAND,
-      backgroundColor: DEMAND.map(d => d >= 3.0 ? 'rgba(229,115,115,0.8)' : d >= 2.5 ? 'rgba(255,183,77,0.8)' : 'rgba(79,195,247,0.6)'),
-      borderRadius: 4,
-    }]
-  },
-  options: { ...baseOptions,
-    plugins: { ...baseOptions.plugins, legend: { display: false } },
-    scales: { ...baseOptions.scales,
-      y: {
-        ...baseOptions.scales.y,
-        min: 0, max: 4.5,
-        title: { display: true, text: 'demand_ratio (≥1.5 = surge)', color: '#666' }
-      }
-    }
-  }
-});
-
-// Chart 4: Cost efficiency
-const PAID = ['ec2_5k','ec2_50k','emr_50k'];
-const EPS_PAID = [470.1, 1836.8, 2045.7];
-const COST_HR = [0.20, 0.20, 1.25];
-const EFFICIENCY = EPS_PAID.map((e, i) => +(e / COST_HR[i]).toFixed(0));
-new Chart(document.getElementById('chart4'), {
-  type: 'bar',
-  data: {
-    labels: PAID,
-    datasets: [{
-      label: 'EPS per $/hr',
-      data: EFFICIENCY,
-      backgroundColor: [COLORS.ec2, COLORS.ec2, COLORS.emr],
-      borderRadius: 4,
-    }]
-  },
-  options: { ...baseOptions,
-    plugins: { ...baseOptions.plugins, legend: { display: false } },
-    scales: { ...baseOptions.scales,
-      y: {
-        ...baseOptions.scales.y,
-        title: { display: true, text: 'EPS per $/hr (higher = better)', color: '#666' }
-      }
-    }
-  }
-});
-
-// Chart 6: Adaptive window latency comparison
-new Chart(document.getElementById('chart6'), {
-  type: 'bar',
-  data: {
-    labels: ['500 drivers\n(2s window)', '1K drivers\n(2s window)', '5K drivers\n(5s window)', '50K drivers\n(10s window)'],
+    labels: ['1.0× (no surge)','1.5×','2.0×','2.5×'],
     datasets: [
-      { label: 'p50 latency (ms)', data: [3047, 2767, 5847, 20630], backgroundColor: 'rgba(79,195,247,0.7)', borderRadius: 4 },
-      { label: 'p95 latency (ms)', data: [4328, 3813, 6147, 33374], backgroundColor: 'rgba(255,183,77,0.7)', borderRadius: 4 },
+      { label: 'Avg Fare (₹)', data: [138.56, 221.62, 275.70, 314.91], backgroundColor: 'rgba(79,195,247,0.8)', borderRadius: 4, yAxisID: 'y' },
+      { label: 'Cancel Rate (%)', data: [16.2, 12.3, 15.2, 19.2], backgroundColor: 'rgba(229,115,115,0.7)', borderRadius: 4, yAxisID: 'y2' },
     ]
   },
-  options: { ...baseOptions,
-    scales: { ...baseOptions.scales,
-      y: { ...baseOptions.scales.y,
-        title: { display: true, text: 'Latency (ms)', color: '#666' }
-      }
+  options: { ...baseOpts,
+    scales: {
+      x: baseOpts.scales.x,
+      y:  { ...baseOpts.scales.y, position: 'left',  title: { display: true, text: 'Avg Fare (₹)', color: '#4fc3f7' } },
+      y2: { ...baseOpts.scales.y, position: 'right', title: { display: true, text: 'Cancel Rate (%)', color: '#e57373' }, grid: { drawOnChartArea: false } },
+    }
+  }
+});
+
+// Q3: Surge distribution grouped bar (top 5 cities for readability)
+new Chart(document.getElementById('chart_q3'), {
+  type: 'bar',
+  data: {
+    labels: ['AMD','BLR','CHN','DEL','HYD','JAI','KOL','MUM','PUN','SRT'],
+    datasets: [
+      { label: '1.0× (base)',  data: [49,45,42,47,41,47,39,41,50,61], backgroundColor: 'rgba(79,195,247,0.7)', borderRadius: 2 },
+      { label: '1.5× surge',  data: [27,31,29,25,31,28,28,32,33,21], backgroundColor: 'rgba(255,183,77,0.7)',  borderRadius: 2 },
+      { label: '2.0× surge',  data: [21,17,25,22,22,21,23,23,15,14], backgroundColor: 'rgba(229,115,115,0.7)', borderRadius: 2 },
+      { label: '2.5× surge',  data: [3,7,4,6,6,4,10,4,2,4],          backgroundColor: 'rgba(206,147,216,0.7)', borderRadius: 2 },
+    ]
+  },
+  options: { ...baseOpts,
+    scales: { ...baseOpts.scales,
+      y: { ...baseOpts.scales.y, title: { display: true, text: 'Trip count', color: '#666' } }
     }
   }
 });
