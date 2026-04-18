@@ -3,6 +3,9 @@
 # Shows: data ingestion → real-time metrics → scaling → fault → recovery → batch analytics
 set -euo pipefail
 
+# Always run from project root (works whether called from scripts/ or root)
+cd "$(dirname "$0")/.."
+
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
 info()  { echo -e "${CYAN}[DEMO]${NC} $*"; }
 ok()    { echo -e "${GREEN}[OK]${NC}   $*"; }
@@ -22,8 +25,19 @@ info "Step 1/7: Starting Kafka + Grafana + Prometheus stack..."
 docker compose -f config/docker-compose.yml up -d 2>/dev/null || \
   (cd monitoring && docker compose up -d)
 
-info "Waiting 25s for services to initialise..."
-sleep 25
+info "Waiting 35s for Kafka brokers to initialise..."
+sleep 35
+
+# Create Kafka topics (KAFKA_AUTO_CREATE_TOPICS_ENABLE=false, so must be explicit)
+info "Creating Kafka topics..."
+for TOPIC in gps-critical gps-surge gps-normal; do
+  docker exec kafka-broker-1 kafka-topics \
+    --bootstrap-server localhost:9092 \
+    --create --if-not-exists \
+    --topic "$TOPIC" \
+    --partitions 3 \
+    --replication-factor 3 2>/dev/null && ok "Topic $TOPIC ready" || warn "Topic $TOPIC may already exist"
+done
 ok "Infrastructure ready"
 echo ""
 
@@ -36,7 +50,7 @@ pause "Open Grafana in browser"
 
 # ── STEP 3: 1K drivers — show baseline ───────────────────────────────────────
 info "Step 3/7: Starting 1K driver simulation..."
-python3 src/gps_simulator.py --drivers 1000 --duration 120 &
+KAFKA_BROKERS=localhost:9092 python3 src/gps_simulator.py --drivers 1000 --duration 600 &
 SIM_PID=$!
 ok "GPS simulator started (PID $SIM_PID)"
 
@@ -55,7 +69,7 @@ pause "Observe Grafana — EPS rising and latency < 5s SLA line"
 # ── STEP 4: Scale to 5K drivers ───────────────────────────────────────────────
 info "Step 4/7: Scaling to 5K drivers (watch surge zones appear)..."
 kill $SIM_PID 2>/dev/null || true
-python3 src/gps_simulator.py --drivers 5000 --duration 120 &
+KAFKA_BROKERS=localhost:9092 python3 src/gps_simulator.py --drivers 5000 --duration 600 &
 SIM_PID=$!
 
 # Restart Spark with 5s window

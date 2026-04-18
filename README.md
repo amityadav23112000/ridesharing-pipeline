@@ -16,45 +16,106 @@ A production-grade, real-time ridesharing data pipeline that processes GPS telem
 ## Architecture
 
 ```
-GPS Devices (500–50K drivers)
-        │
-        ▼
-┌───────────────────────────────────────┐
-│  INGESTION LAYER                      │
-│  FastAPI REST :8080                   │
-│  Kafka 3-tier topics (16 partitions)  │
-│  gps-normal / gps-surge / gps-critical│
-└───────────────┬───────────────────────┘
-                │
-┌───────────────▼───────────────────────┐
-│  SPEED LAYER (< 5s SLA)               │
-│  Spark Structured Streaming           │
-│  • Adaptive window: max(2, N÷1000)s   │
-│  • Stream-stream join (±30s watermark)│
-│  • Surge detection: demand_ratio≥1.5  │
-│  • K8s HPA: 1→8 pods on CPU≥70%       │
-└───────┬───────────────┬───────────────┘
-        │               │
-        ▼               ▼
-┌──────────────┐  ┌──────────────────┐
-│  DynamoDB    │  │  S3 Data Lake    │
-│  surge-      │  │  (Parquet)       │
-│  pricing     │  └────────┬─────────┘
-│  (hot store) │           │
-└──────┬───────┘           ▼
-       │          ┌─────────────────────┐
-       │          │  BATCH LAYER        │
-       │          │  AWS Glue ETL       │
-       │          │  Glue Crawler       │
-       │          │  Athena Analytics   │
-       │          └─────────────────────┘
-       │
-       ▼
-  Lambda → SNS (surge_multiplier ≥ 2.0 alerts)
+┌─────────────────────────────────────────────────────────────────┐
+│                     DATA PRODUCERS                              │
+│        GPS Devices / Driver Mobile Apps (500–50K drivers)       │
+│        Each driver sends 1 GPS event/second                     │
+└────────────────────────────┬────────────────────────────────────┘
+                             │  HTTP POST /ingest
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    INGESTION LAYER                              │
+│                                                                 │
+│   FastAPI REST Server (:8080)  ←── src/rest_ingestor.py         │
+│   Reads zone demand ratio and routes each event to:             │
+│                                                                 │
+│   ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐        │
+│   │gps-critical │  │ gps-surge   │  │   gps-normal    │        │
+│   │(zone ≥2.0x) │  │(zone ≥1.5x) │  │ (zone < 1.5x)  │        │
+│   └──────┬──────┘  └──────┬──────┘  └────────┬────────┘        │
+│          │                │                   │                 │
+│          └────────────────┴───────────────────┘                 │
+│                           │  3 Kafka topics                     │
+│                           │  3 partitions each                  │
+│                           │  Replicated across 3 brokers        │
+│                           │  Messages stored on disk (durable)  │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │
+          ┌─────────────────┴──────────────────┐
+          │        SHARED S3 BRIDGE            │
+          │  (Speed Layer writes raw events)   │
+          │  (Batch Layer reads same S3 files) │
+          └────────┬───────────────────────────┘
+                   │
+     ┌─────────────┴──────────────────────────────────────┐
+     │                                                    │
+     ▼                                                    ▼
+┌──────────────────────────────┐     ┌────────────────────────────────────┐
+│        SPEED LAYER           │     │           BATCH LAYER              │
+│    (Real-time, < 5s SLA)     │     │       (Hourly, analytics)          │
+│                              │     │                                    │
+│  Spark Structured Streaming  │     │  Step Functions triggers hourly:   │
+│  ← src/spark_streaming_job.py│     │                                    │
+│                              │     │  1. CHECK: Is S3 input > 1MB?      │
+│  reads all 3 Kafka topics    │     │     NO  → SKIP (saves cost)        │
+│  every WINDOW_SECONDS:       │     │     YES → continue                 │
+│    500  drivers → 2s window  │     │                                    │
+│    5000 drivers → 5s window  │     │  2. AWS Glue ETL Job               │
+│    50K  drivers → 10s window │     │     ← src/glue_batch_job.py        │
+│                              │     │     reads: S3 raw/trips/           │
+│  Stream-stream JOIN:         │     │     city=*/date=YYYY-MM-DD/        │
+│    supply stream (drivers)   │     │     writes: S3 processed/          │
+│    + demand stream (riders)  │     │     • city_stats.parquet           │
+│    watermark = 30s           │     │     • driver_earnings.parquet      │
+│                              │     │     • surge_analysis.parquet       │
+│  Surge detection per zone:   │     │     • zone_heatmap.parquet         │
+│    demand_ratio ≥ 1.5 → SURGE│     │                                    │
+│    multiplier: 1.5x → 3.0x  │     │  3. Glue Crawler                   │
+│                              │     │     scans S3 processed/            │
+│  Writes results to:          │     │     updates Glue Data Catalogue    │
+│  ┌───────────┐ ┌──────────┐  │     │                                    │
+│  │ DynamoDB  │ │    S3    │  │     │  4. Amazon Athena                  │
+│  │surge_price│ │raw/trips/│  │     │     SQL queries on parquet files   │
+│  │(hot store)│ │(Parquet) │  │     │     via Glue catalogue             │
+│  └─────┬─────┘ └────┬─────┘  │     │     results → S3 athena-results/  │
+│        │            │        │     │                                    │
+└────────┼────────────┼────────┘     └────────────────────────────────────┘
+         │            │
+         │            └─────────────────────────────────────────┐
+         │                                         (same S3     │
+         ▼                                          bucket)      │
+┌─────────────────┐                                             │
+│ DynamoDB Stream │                                             │
+│ triggers Lambda │                                             │
+│                 │                                             │
+│ surge_multiplier│                                             ▼
+│   ≥ 2.0 ?       │                              ┌──────────────────────┐
+│   YES → SNS     │                              │  Athena Dashboard    │
+│   alert sent    │                              │  docs/athena_        │
+└─────────────────┘                              │  dashboard.html      │
+                                                 │  6 panels with real  │
+                                                 │  Athena query data   │
+                                                 └──────────────────────┘
 
-ORCHESTRATION: Step Functions (hourly) + Airflow DAG
-OBSERVABILITY: Prometheus + Grafana + CloudWatch
-IaC: Terraform
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+HOW SPEED LAYER AND BATCH LAYER ARE CONNECTED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Spark (Speed Layer) writes every processed GPS event to:
+    s3://ridesharing-pipeline-h20250060/raw/trips/city=X/date=Y/
+
+  Glue ETL (Batch Layer) reads from the SAME S3 path every hour.
+
+  This S3 bucket is the BRIDGE between the two layers.
+  Speed Layer produces → S3 → Batch Layer consumes.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ORCHESTRATION  : AWS Step Functions (hourly) + Apache Airflow DAG
+OBSERVABILITY  : Prometheus (metrics) → Grafana (dashboards)
+                 CloudWatch (alarms + RidesharingPipeline dashboard)
+FAULT TOLERANCE: Kafka checkpoint replay → zero data loss
+IaC            : Terraform (31 AWS resources)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
 ---
